@@ -1,6 +1,11 @@
 import os 
 import time 
 
+<<<<<<< HEAD
+=======
+def gwrdownxcale(xpath, ypath, opath,oaux=False,epsg_code=4979, clean=True):
+    gwr_grid_downscaling(xpath, ypath, opath, oaux=oaux,epsg_code=epsg_code, clean=clean)
+>>>>>>> utils
 
 def gwr_grid_downscaling(xpath, ypath, opath, oaux=False,epsg_code=4979, clean=True):
     # if epsg_code=4979 is None, use from the data 

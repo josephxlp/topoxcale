@@ -5,4 +5,8 @@ gdem_vfill_dir = "/media/ljp238/12TBWolf/ARCHIEVE/GEDI/GRID/comprexn/GEDI_L3_Vfi
 
 gdtm_v_fn,gdsm_v_fn,gdem_vfill_dir
 
+<<<<<<< HEAD
 topoxcale_dir = "/home/ljp238/Documents/UoE/topoxcale/topoxcale"
+=======
+topoxcale_dir = "/home/ljp238/Documents/UoE/topoxcale"
+>>>>>>> utils
