@@ -7,6 +7,7 @@ from topoxcale.mlxcale import (load_model,check_and_resample,read_raster,
                      remove_nulls,sample_data,train_model,predict_and_save,
                      resample_y_to_match_predictions,
                      save_residuals_and_correct_predictions)
+from topoxcale.sagaxcale import gwr_grid_downscaling
 
 model_params = {
     'num_rounds': 1000,  # This will be mapped to 'iterations'
@@ -14,6 +15,10 @@ model_params = {
     #'depth': 6,
     'verbose': 200
 }
+
+def gwrdownxcale(xpath, ypath, opath,oaux=False,epsg_code=4979, clean=True):
+    gwr_grid_downscaling(xpath, ypath, opath, oaux=oaux,epsg_code=epsg_code, clean=clean)
+
 
 def mldownxcale(x_path, y_path, model_name, model_params, out_path, n=0):
     """
