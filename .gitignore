@@ -1,8 +1,12 @@
 # Notebook and Models 
-__pycache__
+*__pycache__
+*.pyc 
+**//*.pyc 
 znotes
-uvars.py 
+*uvars.py 
 ATaskx
+catboost_info 
+__pycache__/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
