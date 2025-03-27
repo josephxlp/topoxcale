@@ -129,3 +129,193 @@ def build_vrt(epsg_code=4326, input_list="my_list.txt", output_vrt="doq_index.vr
         print(f"✅ VRT file '{output_vrt}' created successfully.")
     except subprocess.CalledProcessError as e:
         print(f"❌ Error while building VRT: {e}")
+
+def load_raster(fpath):
+    """
+    Loads a raster dataset and reads the first band as a masked array.
+
+    Parameters:
+    fpath (str): Path to the raster file.
+
+    Returns:
+    numpy.ndarray: A NumPy array with nodata values set to np.nan.
+    """
+    with rasterio.open(fpath) as src:
+        data = src.read(1, masked=True)
+        data = data.filled(np.nan)  # Ensure nodata values are np.nan
+    return data
+
+def write_raster(output_path, data, reference_path):
+    """
+    Writes a NumPy array to a raster file, preserving metadata from a reference raster.
+
+    Parameters:
+    output_path (str): Path to save the output raster.
+    data (numpy.ndarray): Data to write to the raster.
+    reference_path (str): Path to the reference raster for metadata.
+    """
+    with rasterio.open(reference_path) as src:
+        meta = src.meta.copy()
+
+    # Update metadata
+    meta.update(dtype=np.float32, nodata=np.nan)
+
+    with rasterio.open(output_path, 'w', **meta) as dst:
+        dst.write(data, 1)
+
+def fill_nodata(data, smoothing_iterations=0):
+    """
+    Fills nodata values in a raster using interpolation.
+
+    Parameters:
+    data (numpy.ndarray): Input raster data with nodata values.
+    smoothing_iterations (int): Number of smoothing iterations. Defaults to 0.
+
+    Returns:
+    numpy.ndarray: Raster data with nodata values filled.
+    """
+    mask = np.isfinite(data)  # Valid data mask
+    max_search_distance = int(math.sqrt(data.shape[0] ** 2 + data.shape[1] ** 2)) + 1
+
+    return fillnodata(data, mask=mask, max_search_distance=max_search_distance, smoothing_iterations=smoothing_iterations)
+
+def rio_fillna(input_path, output_path, smoothing_iterations=0):
+    """
+    Loads a raster, fills nodata values, and saves the result.
+
+    Parameters:
+    input_path (str): Path to the input raster.
+    output_path (str): Path to save the output raster.
+    smoothing_iterations (int): Number of smoothing iterations for nodata filling. Defaults to 0.
+    """
+    output_path = output_path.replace('.tif', f'_si{smoothing_iterations}.tif')
+    
+    # Load data
+    data = load_raster(input_path)
+
+    # Fill nodata
+    filled_data = fill_nodata(data, smoothing_iterations)
+
+    # Write output raster
+    write_raster(output_path, filled_data, input_path)
+
+
+
+import os
+from osgeo import gdal, gdalconst
+import numpy as np
+import pandas as pd
+import rasterio
+from pyproj import Transformer
+
+
+# # Conversion factor (degrees per meter at the equator)
+# conversion_factor = 9.259259259259259e-6
+
+# # Function to convert meters to degrees
+# def meters_to_degrees(meters):
+#     return conversion_factor * meters
+
+# # Function to convert degrees to meters
+# def degrees_to_meters(degrees):
+#     return degrees / conversion_factor
+
+# # Example usage
+# x_degrees = 0.0001111111111111111164
+# x_meters = degrees_to_meters(x_degrees)
+# print(f"x in meters: {x_meters}")
+
+# # Example for a 30m grid size
+# grid_size_meters = 30
+# grid_size_degrees = meters_to_degrees(grid_size_meters)
+# print(f"Grid size in degrees for {grid_size_meters}m: {grid_size_degrees}")
+
+
+def read_xyz(rpath, default_band_name='Band'):
+    """
+    Reads raster data and extracts coordinates, bands, and metadata.
+
+    Parameters:
+        rpath (str): Path to the raster file.
+        default_band_name (str): Default prefix for band names.
+
+    Returns:
+        tuple: x-coordinates, y-coordinates, bands, CRS, band names, and NoData value.
+    """
+    with rasterio.open(rpath) as f:
+        bands = f.read()  # Read all bands
+        x = np.linspace(f.bounds.left, f.bounds.right, f.width)
+        y = np.linspace(f.bounds.top, f.bounds.bottom, f.height)
+        crs = f.crs  # Get the CRS
+        nodata = f.nodata  # Get the NoData value
+
+        # Determine band names
+        if f.descriptions and any(f.descriptions):
+            band_names = [
+                desc if desc else f'{default_band_name}_{i + 1}' 
+                for i, desc in enumerate(f.descriptions)
+            ]
+        else:
+            band_names = [
+                default_band_name if f.count == 1 
+                else f'{default_band_name}_{i + 1}' 
+                for i in range(f.count)
+            ]
+    return x, y, bands, crs, band_names, nodata
+
+def xyz2df(x, y, bands, band_names, nodata):
+    """
+    Converts raster data into a DataFrame.
+
+    Parameters:
+        x (array): x-coordinates.
+        y (array): y-coordinates.
+        bands (array): Raster bands.
+        band_names (list): Band names.
+        nodata (float): NoData value.
+
+    Returns:
+        pd.DataFrame: Flattened raster data in a tabular format.
+    """
+    xx, yy = np.meshgrid(x, y)
+    data = {'x': xx.flatten(), 'y': yy.flatten()}
+    
+    for i, band in enumerate(bands):
+        band_data = band.flatten()
+        if nodata is not None:
+            band_data[band_data == nodata] = np.nan  # Replace NoData values with NaN
+        data[band_names[i]] = band_data
+    
+    return pd.DataFrame(data)
+
+def reproject_latlon(df, crs, epsgcode='epsg:4326'):
+    """
+    Reprojects raster coordinates to latitude and longitude.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame containing raster data.
+        crs: Source CRS of the raster.
+        epsgcode (str): Target EPSG code for reprojection.
+
+    Returns:
+        pd.DataFrame: DataFrame with latitude and longitude columns.
+    """
+    transformer = Transformer.from_crs(crs, epsgcode, always_xy=True)
+    df['lon'], df['lat'] = transformer.transform(df['x'].values, df['y'].values)
+    return df[['lat', 'lon'] + [col for col in df.columns if col not in ['x', 'y', 'lat', 'lon']]]
+
+def raster2df(rpath, default_band_name='Band', epsgcode='epsg:4326'):
+    """
+    Converts raster data into a reprojected DataFrame.
+
+    Parameters:
+        rpath (str): Path to the raster file.
+        default_band_name (str): Default prefix for band names.
+        epsgcode (str): Target EPSG code for reprojection.
+
+    Returns:
+        pd.DataFrame: Reprojected raster data in tabular format.
+    """
+    x, y, bands, crs, band_names, nodata = read_xyz(rpath, default_band_name)
+    df = xyz2df(x, y, bands, band_names, nodata)
+    return reproject_latlon(df, crs, epsgcode)
