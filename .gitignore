@@ -1,7 +1,7 @@
 # Notebook and Models 
 *__pycache__
 *.pyc 
-**//*.pyc 
+*.pyc 
 znotes
 
 uvars.py 
