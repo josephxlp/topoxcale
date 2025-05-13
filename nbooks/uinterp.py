@@ -59,7 +59,10 @@ def riofill(fipath, fopath, si=0):
     if os.path.isfile(fopath):
         print(f"already created {fopath}")
         return fopath
+    print('load data')
     rdata = load_raster(fipath)
+    print('fill data')
     fdata = fill_nodata(rdata, si)
+    print('write data')
     write_raster(fopath, fdata, fipath)
     return fopath
